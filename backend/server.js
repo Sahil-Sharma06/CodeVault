@@ -246,3 +246,73 @@ const PORT = Number(process.env.PORT) || 8000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+// Search snippets with filters
+app.get('/api/snippets/search', authMiddleware, async (req, res) => {
+  const userId = req.user?.id;
+  const { query, language, tags } = req.query;
+  
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  
+  try {
+    let searchQuery = `
+      SELECT DISTINCT cs.* 
+      FROM code_snippets cs
+      LEFT JOIN snippet_tags st ON cs.id = st.snippet_id
+      LEFT JOIN tags t ON st.tag_id = t.id
+      WHERE cs.user_id = $1
+    `;
+    
+    const params = [userId];
+    let paramCount = 1;
+    
+    // Add search conditions
+    if (query && query.trim()) {
+      paramCount++;
+      searchQuery += ` AND (cs.title ILIKE $${paramCount} OR cs.code ILIKE $${paramCount} OR cs.description ILIKE $${paramCount})`;
+      params.push(`%${query.trim()}%`);
+    }
+    
+    if (language && language.trim()) {
+      paramCount++;
+      searchQuery += ` AND cs.language ILIKE $${paramCount}`;
+      params.push(`%${language.trim()}%`);
+    }
+    
+    if (tags && tags.trim()) {
+      const tagList = tags.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag);
+      if (tagList.length > 0) {
+        paramCount++;
+        searchQuery += ` AND EXISTS (
+          SELECT 1 FROM snippet_tags st2 
+          JOIN tags t2 ON st2.tag_id = t2.id 
+          WHERE st2.snippet_id = cs.id AND t2.name = ANY($${paramCount})
+        )`;
+        params.push(tagList);
+      }
+    }
+    
+    searchQuery += ' ORDER BY cs.created_at DESC';
+    
+    const snippetsResult = await pool.query(searchQuery, params);
+    const snippets = snippetsResult.rows;
+    
+    // Fetch tags for each snippet
+    for (const snippet of snippets) {
+      const tagResult = await pool.query(
+        `SELECT t.name
+         FROM tags t
+         JOIN snippet_tags st ON st.tag_id = t.id
+         WHERE st.snippet_id = $1
+         ORDER BY t.name`,
+        [snippet.id]
+      );
+      snippet.tags = tagResult.rows.map((r) => r.name);
+    }
+    
+    res.status(200).json(snippets);
+  } catch (error) {
+    console.error('Error searching snippets:', error);
+    res.status(500).json({ error: 'Failed to search snippets' });
+  }
+});

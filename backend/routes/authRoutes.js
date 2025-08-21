@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import pool from '../db.js';
 import jwt from 'jsonwebtoken';
 import { authMiddleware } from '../middleware/authMiddleware.js';
-import axios from 'axios'; 
+import axios from 'axios';
 
 const router = express.Router();
 
@@ -12,12 +12,12 @@ router.post('/register', async (req, res) => {
 
   try {
     const existingUser = await pool.query(
-      'SELECT * FROM users where email = $1',
+      'SELECT * FROM users WHERE email = $1',
       [email]
     );
 
     if (existingUser.rows.length > 0) {
-      return res.status(400).json({ message: 'User already exist' });
+      return res.status(400).json({ message: 'User already exists' });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -28,9 +28,13 @@ router.post('/register', async (req, res) => {
       [username, email, hashedPassword]
     );
 
+    const payload = { user: { id: newUser.rows[0].id } };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
+
     res.status(201).json({
       message: 'User Registered Successfully',
       user: newUser.rows[0],
+      token,
     });
   } catch (error) {
     console.error('Registration error', error.message);
@@ -57,7 +61,7 @@ router.post('/login', async (req, res) => {
     const payload = {
       user: {
         id: user.id,
-      }
+      },
     };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
@@ -129,10 +133,10 @@ router.get('/github/callback', async (req, res) => {
       expiresIn: '7d',
     });
 
-    res.json({ token });
+    res.redirect(`http://localhost:5173/auth/callback?token=${token}`);
   } catch (err) {
     console.error('GitHub OAuth error:', err.message);
-    res.status(500).json({ error: 'GitHub login failed' });
+    res.redirect('http://localhost:5173/auth/callback?error=GitHub login failed');
   }
 });
 

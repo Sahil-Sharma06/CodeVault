@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.react-tagsinput {
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  padding: 0.5rem;
+}
+.react-tagsinput-tag {
+  background-color: #3b82f6;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  margin-right: 0.5rem;
+}
